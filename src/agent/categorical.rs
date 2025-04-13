@@ -39,7 +39,7 @@ pub struct CategoricalDeepQNetworkAgent<
     const D: usize,
     M: AutodiffModule<B>,
     O: SimpleOptimizer<B::InnerBackend>,
-    S: LrScheduler<B>,
+    S: LrScheduler,
 > {
     model: M,
     teacher_model: M,
@@ -58,7 +58,7 @@ impl<
         const D: usize,
         M: AutodiffModule<B> + Estimator<B> + Distributional<B>,
         O: SimpleOptimizer<B::InnerBackend>,
-        S: LrScheduler<B>,
+        S: LrScheduler,
     > CategoricalDeepQNetworkAgent<B, D, M, O, S>
 {
     pub fn new(
@@ -93,7 +93,7 @@ where
     M: AutodiffModule<B> + Display + Estimator<B> + Distributional<B>,
     M::InnerModule: Estimator<B::InnerBackend> + Distributional<B::InnerBackend>,
     O: SimpleOptimizer<B::InnerBackend>,
-    S: LrScheduler<B> + Clone,
+    S: LrScheduler + Clone,
 {
     fn temporaral_difference_error(
         &self,
@@ -167,7 +167,7 @@ where
     M: AutodiffModule<B> + Display + Estimator<B> + Distributional<B>,
     M::InnerModule: Estimator<B::InnerBackend> + Distributional<B::InnerBackend>,
     O: SimpleOptimizer<B::InnerBackend>,
-    S: LrScheduler<B> + Clone,
+    S: LrScheduler + Clone,
 {
     fn policy(&self, observation: &[f32]) -> Action {
         let shape = *self.observation_space.shape();
@@ -315,7 +315,7 @@ where
             .with_context(|| "Failed to write optimizer record")?;
 
         let scheduler_record = self.lr_scheduler.to_record();
-        let scheduler_record: <<S as LrScheduler<B>>::Record as Record<_>>::Item<
+        let scheduler_record: <<S as LrScheduler>::Record<B> as Record<_>>::Item<
             HalfPrecisionSettings,
         > = scheduler_record.into_item();
         let mut scheduler_file = File::create(artifacts_dir.join("scheduler.mpk"))
@@ -343,7 +343,12 @@ where
                     .with_context(|| "Failed to read optimizer record")?;
             let record = record
                 .into_iter()
-                .map(|(k, v)| (ParamId::from(k), AdaptorRecord::from_item(v, &self.device)))
+                .map(|(k, v)| {
+                    (
+                        ParamId::deserialize(k.as_str()),
+                        AdaptorRecord::from_item(v, &self.device),
+                    )
+                })
                 .collect::<hashbrown::HashMap<_, _>>();
             self.optimizer = self.optimizer.clone().load_record(record);
         }
@@ -351,11 +356,11 @@ where
         if scheduler_file.exists() {
             let scheduler_file =
                 File::open(scheduler_file).with_context(|| "open scheduler file")?;
-            let record: <<S as LrScheduler<B>>::Record as Record<_>>::Item<HalfPrecisionSettings> =
+            let record: <<S as LrScheduler>::Record<B> as Record<_>>::Item<HalfPrecisionSettings> =
                 rmp_serde::decode::from_read(scheduler_file)
                     .with_context(|| "Failed to read scheduler record")?;
             let record =
-                <<S as LrScheduler<B>>::Record as Record<_>>::from_item(record, &self.device);
+                <<S as LrScheduler>::Record<B> as Record<_>>::from_item(record, &self.device);
             self.lr_scheduler = self.lr_scheduler.clone().load_record(record);
         }
 
@@ -370,7 +375,7 @@ where
     M: AutodiffModule<B> + Display + Estimator<B> + Distributional<B>,
     M::InnerModule: Estimator<B::InnerBackend> + Distributional<B::InnerBackend>,
     O: SimpleOptimizer<B::InnerBackend>,
-    S: LrScheduler<B> + Clone,
+    S: LrScheduler + Clone,
 {
 }
 

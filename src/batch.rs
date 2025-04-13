@@ -43,7 +43,11 @@ impl<B: AutodiffBackend> Batcher<Experience<DeepQNetworkState>, DeepQNetworkBatc
                     ),
                     match (x.action, self.action_space) {
                         (Action::Discrete(value), ActionSpace::Discrete(num_class)) => {
-                            Tensor::one_hot(value as usize, num_class as usize, &Default::default())
+                            Tensor::<B, 2>::one_hot(
+                                value as usize,
+                                num_class as usize,
+                                &Default::default(),
+                            )
                         }
                     },
                     match self.action_space {
